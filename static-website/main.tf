@@ -41,28 +41,35 @@ resource "aws_s3_bucket" "bucket" {
   }
 }
 
-# Bucket policy that references the IAM policy
-resource "aws_s3_bucket_policy" "allow_access_oac" {
+# Static website hosting
+resource "aws_s3_bucket_website_configuration" "website" {
   bucket = aws_s3_bucket.bucket.id
-  policy = data.aws_iam_policy_document.allow_access_oac.json
+
+  index_document {
+    suffix = "index.html"
+  }
+
+  error_document {
+    key = "error.html"
+  }
+}
+
+# Bucket policy that references the IAM policy
+resource "aws_s3_bucket_policy" "policy" {
+  bucket = aws_s3_bucket.bucket.id
+  policy = data.aws_iam_policy_document.policy.json
 }
 
 # IAM policy to act as the bucket policy
-data "aws_iam_policy_document" "allow_access_oac" {
+data "aws_iam_policy_document" "policy" {
   statement {
     actions = ["s3:GetObject"]
 
     resources = ["${aws_s3_bucket.bucket.arn}/*"]
 
-    # Only access from the CDN distribution
     principals {
-      type        = "Service"
-      identifiers = ["cloudfront.amazonaws.com"]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "AWS:SourceArn"
-      values   = [aws_cloudfront_distribution.s3_distribution.arn]
+      type        = "AWS"
+      identifiers = ["*"]
     }
   }
 }
@@ -76,13 +83,13 @@ resource "aws_s3_bucket_versioning" "no_versioning" {
 }
 
 # Blocking public access
-resource "aws_s3_bucket_public_access_block" "no_public_access" {
+resource "aws_s3_bucket_public_access_block" "public_access" {
   bucket = aws_s3_bucket.bucket.id
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
 }
 
 # ---------------------------------------------
@@ -91,11 +98,17 @@ resource "aws_s3_bucket_public_access_block" "no_public_access" {
 
 # CloudFront distribution
 resource "aws_cloudfront_distribution" "s3_distribution" {
+  depends_on = [aws_s3_bucket.bucket]
   # S3 origin
   origin {
-    domain_name              = aws_s3_bucket.bucket.bucket_regional_domain_name
-    origin_access_control_id = aws_cloudfront_origin_access_control.oac.id
-    origin_id                = aws_s3_bucket.bucket.id
+    domain_name = aws_s3_bucket_website_configuration.website.website_endpoint
+    origin_id   = aws_s3_bucket.bucket.id
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1", "TLSv1.1", "TLSv1.2"]
+    }
   }
 
   enabled             = true
@@ -143,15 +156,6 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
     app  = var.tag_app
     name = "cdn--${replace(var.tag_app, ".", "-")}"
   }
-}
-
-# OAC policy
-resource "aws_cloudfront_origin_access_control" "oac" {
-  name                              = "oac--${replace(var.tag_app, ".", "-")}"
-  description                       = "Origin Access Control policy for the ${var.tag_app} site"
-  origin_access_control_origin_type = "s3"
-  signing_behavior                  = "always"
-  signing_protocol                  = "sigv4"
 }
 
 # ---------------------------------------------
