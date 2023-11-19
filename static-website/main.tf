@@ -135,9 +135,10 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
 
   # Allow and cache only GET, HEAD, and OPTIONS
   default_cache_behavior {
-    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
-    cached_methods   = ["GET", "HEAD", "OPTIONS"]
-    target_origin_id = aws_s3_bucket.bucket.id
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD", "OPTIONS"]
+    target_origin_id           = aws_s3_bucket.bucket.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.default.id
 
     # No forwarding at all
     forwarded_values {
@@ -155,6 +156,37 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
   tags = {
     app  = var.tag_app
     name = "cdn--${replace(var.tag_app, ".", "-")}"
+  }
+}
+
+# Response headers for distribution
+resource "aws_cloudfront_response_headers_policy" "default" {
+  name    = "${replace(var.tag_app, ".", "-")}-policy"
+  comment = "Policy to ensure security headers are included"
+
+  security_headers_config {
+    # No sniffing for content
+    content_type_options {
+      override = true
+    }
+    # Iframe embedding configuration
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+    # Protection against XSS
+    xss_protection {
+      override   = true
+      protection = true
+      mode_block = true
+    }
+    # Ensure HTTPs
+    strict_transport_security {
+      access_control_max_age_sec = 2628000
+      include_subdomains         = true
+      override                   = true
+      preload                    = true
+    }
   }
 }
 
