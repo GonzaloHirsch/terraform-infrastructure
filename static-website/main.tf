@@ -188,6 +188,22 @@ resource "aws_cloudfront_response_headers_policy" "default" {
       preload                    = true
     }
   }
+
+  # Removing sensitive headers
+  remove_headers_config {
+    items {
+      header = "Server"
+    }
+    items {
+      header = "Powered-by"
+    }
+    items {
+      header = "ASPNET"
+    }
+    items {
+      header = "ASPNETMVC"
+    }
+  }
 }
 
 # ---------------------------------------------
