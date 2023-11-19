@@ -182,7 +182,7 @@ resource "aws_cloudfront_response_headers_policy" "default" {
     }
     # Ensure HTTPs
     strict_transport_security {
-      access_control_max_age_sec = 2628000
+      access_control_max_age_sec = 31536000
       include_subdomains         = true
       override                   = true
       preload                    = true
